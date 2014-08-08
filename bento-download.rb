@@ -19,10 +19,10 @@ module Bento
     def initialize(path, etag)
       @path, @etag = path, etag
 
-      filename =~ /\Aopscode_([a-z]+)-([0-9.]+)(-i386|)_chef-provisionerless.box\Z/
+      fail "Unable to match #{filename}" unless filename =~ /\Aopscode_([a-z]+)-([0-9.]+)(-i386|-x86_64|)_chef-provisionerless.box\Z/
       @os = Regexp.last_match[1]
       @version = Gem::Version.new Regexp.last_match[2]
-      @bitness = Regexp.last_match[3] == '' ? 64 : 32
+      @bitness = Regexp.last_match[3] == '-i386' ? 32 : 64
     end
 
     def url
@@ -125,17 +125,17 @@ end
 
 bento = Bento::Lister.new
 
-[
+items = [
   ['centos', '~> 5.0'],
   ['centos', '~> 6.0'],
+  ['centos', '~> 7.0'],
   ['ubuntu', '14.04'],
   ['debian', '~> 7.0']
-].each do |os, ver|
-  puts "#{os} #{ver}"
-  item32 = bento.latest(os, ver, 32)
-  item64 = bento.latest(os, ver, 64)
-  puts "  #{item32}: #{item32.path}"
-  puts "  #{item64}: #{item64.path}"
-  Bento::Fetcher.new(item32).run
-  Bento::Fetcher.new(item64).run
+].map do |os, ver|
+  [32, 64].map { |b| bento.latest(os, ver, b) }
+end.flatten.compact.sort
+
+items.each do |item|
+  puts format('%-8s %-5s %2sbit -> %s', item.os, item.version, item.bitness, item.path)
+  Bento::Fetcher.new(item).run unless ARGV.include?('-n')
 end
